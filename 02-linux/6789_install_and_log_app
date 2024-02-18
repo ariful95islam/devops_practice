@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# prepare environment, install all tools
+apt update
+NEW_USER=myapp
+
+echo "install node, npm, curl, wget, net-tools"
+apt install -y nodejs npm curl net-tools  
+sleep 15
+echo ""
+echo "################"
+echo ""
+
+# read user input for log directory
+echo -n "Set log directory location for the application (absolute path): "
+read LOG_DIRECTORY
+if [ -d $LOG_DIRECTORY ]
+then
+  echo "$LOG_DIRECTORY already exists"
+else
+  mkdir -p $LOG_DIRECTORY
+  echo "A new directory $LOG_DIRECTORY has been created"
+fi
+
+# display nodeJS version
+node_version=$(node --version)
+echo "NodeJS version $node_version installed"
+
+# display npm version
+npm_version=$(npm --version)
+echo "NPM version $npm_version installed"
+
+echo ""
+echo "################"
+echo ""
+
+# create new user to run the application and make owner of log dir
+useradd $NEW_USER -m
+chown $NEW_USER -R $LOG_DIRECTORY
+
+# executing the following commands as new user using 'runuser' command
+
+# fetch NodeJS project archive from s3 bucket
+runuser -l $NEW_USER -c "wget https://node-envvars-artifact.s3.eu-west-2.amazonaws.com/bootcamp-node-envvars-project-1.0.0.tgz"
+
+# extract the project archive to ./package folder
+runuser -l $NEW_USER -c "tar zxvf ./bootcamp-node-envvars-project-1.0.0.tgz"
+
+# start the nodejs application in the background, with all needed env vars with new user myapp
+runuser -l $NEW_USER -c "
+    export APP_ENV=dev && 
+    export DB_PWD=mysecret && 
+    export DB_USER=myuser && 
+    export LOG_DIR=$LOG_DIRECTORY && 
+    cd package && 
+    npm install && 
+    node server.js &"
+
+# display that nodejs process is running
+ps aux | grep node | grep -v grep
+
+# display that nodejs is running on port 3000
+netstat -ltnp | grep :3000
+
+: '
+### Script Explanation ###
+
+1. **Environment Preparation and Tool Installation**
+    - The script begins by updating the package list using `apt update`.
+    - It then installs necessary tools including node, npm, curl, wget, and net-tools.
+    - A new user "myapp" is created to securely run the application.
+
+2. **Log Directory Setup**
+    - The script prompts the user to input the directory where the application logs should be stored.
+    - If the directory does not exist, it is created. The path is stored in the "LOG_DIRECTORY" environment variable.
+
+3. **NodeJS and NPM Version Display**
+    - The installed versions of NodeJS and npm are displayed to confirm their installation.
+
+4. **User Creation and Directory Ownership**
+    - A new user named "myapp" is created (if it doesn’t exist) to enhance security by running the application under a service user and not a privileged user.
+    - The ownership of the log directory is assigned to "myapp".
+
+5. **Application Setup and Launch**
+    - As the "myapp" user, the script downloads and extracts the NodeJS project archive from the specified URL.
+    - It sets necessary environment variables including "APP_ENV", "DB_PWD", "DB_USER", and "LOG_DIR".
+    - The script navigates to the "package" directory, installs npm packages, and starts the NodeJS application.
+
+6. **Process and Port Display**
+    - To confirm that the application has started successfully, the script displays the running NodeJS process and the port it is operating on (3000).
+
+### Execution Instructions ###
+- This script should be run with superuser privileges to enable package installation and user creation.
+- Use the following syntax to execute the script:
+  `sudo ./script_name.sh`
+  Replace "script_name.sh" with the actual name of your script.
+'
